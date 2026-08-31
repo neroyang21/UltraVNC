@@ -17,25 +17,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Find and Build Solution
+      - name: Build winvnc.exe Project Directly
         run: |
-          # Ищем решение winvnc.sln или UltraVNC.sln
-          $sln = Get-ChildItem -Recurse -Filter "*.sln" | Where-Object { $_.Name -match "winvnc|UltraVNC" } | Select-Object -First 1
-          
-          if (-not $sln) {
-              $sln = Get-ChildItem -Recurse -Filter "*.sln" | Select-Object -First 1
+          # Ищем целевой файл проекта winvnc.vcxproj или winvnc.sln
+          $proj = Get-ChildItem -Recurse -Filter "winvnc.vcxproj" | Select-Object -First 1
+          if (-not $proj) {
+              $proj = Get-ChildItem -Recurse -Filter "winvnc.sln" | Select-Object -First 1
           }
           
-          if ($sln) {
-              Write-Host "Found solution: $($sln.FullName)"
-              msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /m
+          if ($proj) {
+              Write-Host "Building project: $($proj.FullName)"
+              msbuild $proj.FullName /p:Configuration=Release /p:Platform=x64 /m
           } else {
-              Write-Error "No .sln file found in repository!"
+              Write-Error "winvnc project file not found!"
               exit 1
           }
 
@@ -45,5 +43,5 @@ jobs:
           name: winvnc-x64-release
           path: |
             **/winvnc.exe
-            **/Release/*.exe
+            **/Release/winvnc.exe
           if-no-files-found: error
