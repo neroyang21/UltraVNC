@@ -21,24 +21,27 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build zlib Dependency
+      - name: Install zlib via vcpkg
         run: |
-          # Ищем и собираем проект zlib
-          $zlibProj = Get-ChildItem -Recurse -Filter "*zlib*.vcxproj" | Select-Object -First 1
-          if ($zlibProj) {
-              Write-Host "Building dependency: $($zlibProj.FullName)"
-              msbuild $zlibProj.FullName /p:Configuration=Release /p:Platform=x64 /m
-          } else {
-              Write-Host "zlib.vcxproj not found, proceeding..."
-          }
+          vcpkg install zlib:x64-windows
+          vcpkg integrate install
 
       - name: Build winvnc.exe Project
         run: |
-          # Собираем основной проект сервера
+          # Передаем путь к include и lib от vcpkg напрямую в MSBuild
+          $vcpkgInclude = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include"
+          $vcpkgLib = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
+          
           $winvncProj = Get-ChildItem -Recurse -Filter "winvnc.vcxproj" | Select-Object -First 1
+          
           if ($winvncProj) {
               Write-Host "Building winvnc: $($winvncProj.FullName)"
-              msbuild $winvncProj.FullName /p:Configuration=Release /p:Platform=x64 /m
+              msbuild $winvncProj.FullName `
+                /p:Configuration=Release `
+                /p:Platform=x64 `
+                /p:IncludePath="$vcpkgInclude;$(IncludePath)" `
+                /p:LibraryPath="$vcpkgLib;$(LibraryPath)" `
+                /m
           } else {
               Write-Error "winvnc.vcxproj not found!"
               exit 1
