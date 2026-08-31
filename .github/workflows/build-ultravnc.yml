@@ -28,8 +28,7 @@ jobs:
 
       - name: Build winvnc.exe Project
         run: |
-          # Передаем путь к include и lib от vcpkg напрямую в MSBuild
-          $vcpkgInclude = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include"
+          $vcpkgInc = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include"
           $vcpkgLib = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
           
           $winvncProj = Get-ChildItem -Recurse -Filter "winvnc.vcxproj" | Select-Object -First 1
@@ -39,8 +38,8 @@ jobs:
               msbuild $winvncProj.FullName `
                 /p:Configuration=Release `
                 /p:Platform=x64 `
-                /p:IncludePath="$vcpkgInclude;$(IncludePath)" `
-                /p:LibraryPath="$vcpkgLib;$(LibraryPath)" `
+                /p:CL_AllAdditionalIncludeDirectories="$vcpkgInc" `
+                /p:Link_AllAdditionalLibraryDirectories="$vcpkgLib" `
                 /m
           } else {
               Write-Error "winvnc.vcxproj not found!"
