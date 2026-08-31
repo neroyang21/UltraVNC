@@ -21,19 +21,26 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build winvnc.exe Project Directly
+      - name: Build zlib Dependency
         run: |
-          # Ищем целевой файл проекта winvnc.vcxproj или winvnc.sln
-          $proj = Get-ChildItem -Recurse -Filter "winvnc.vcxproj" | Select-Object -First 1
-          if (-not $proj) {
-              $proj = Get-ChildItem -Recurse -Filter "winvnc.sln" | Select-Object -First 1
-          }
-          
-          if ($proj) {
-              Write-Host "Building project: $($proj.FullName)"
-              msbuild $proj.FullName /p:Configuration=Release /p:Platform=x64 /m
+          # Ищем и собираем проект zlib
+          $zlibProj = Get-ChildItem -Recurse -Filter "*zlib*.vcxproj" | Select-Object -First 1
+          if ($zlibProj) {
+              Write-Host "Building dependency: $($zlibProj.FullName)"
+              msbuild $zlibProj.FullName /p:Configuration=Release /p:Platform=x64 /m
           } else {
-              Write-Error "winvnc project file not found!"
+              Write-Host "zlib.vcxproj not found, proceeding..."
+          }
+
+      - name: Build winvnc.exe Project
+        run: |
+          # Собираем основной проект сервера
+          $winvncProj = Get-ChildItem -Recurse -Filter "winvnc.vcxproj" | Select-Object -First 1
+          if ($winvncProj) {
+              Write-Host "Building winvnc: $($winvncProj.FullName)"
+              msbuild $winvncProj.FullName /p:Configuration=Release /p:Platform=x64 /m
+          } else {
+              Write-Error "winvnc.vcxproj not found!"
               exit 1
           }
 
