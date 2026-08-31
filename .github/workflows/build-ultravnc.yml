@@ -18,6 +18,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install C++ ATL Component
+        run: |
+          $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          Write-Host "Installing ATL to: $vsInstallPath"
+          Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe" `
+            -ArgumentList "modify --installPath `"$vsInstallPath`" --add Microsoft.VisualStudio.Component.VC.ATL --passive --norestart" `
+            -Wait
+
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
