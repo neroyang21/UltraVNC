@@ -1,0 +1,43 @@
+name: Build UltraVNC Server (winvnc.exe)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Позволяет запускать сборку вручную из интерфейса GitHub
+
+jobs:
+  build-windows:
+    name: Build winvnc.exe (x64 Release)
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # Подгружаем подмодули, если они используются в проекте
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet Packages (if present)
+        run: |
+          nuget restore UltraVNC.sln || true
+
+      - name: Build winvnc.exe
+        run: |
+          msbuild UltraVNC.sln `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /t:winvnc `
+            /m
+
+      - name: Upload winvnc.exe Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winvnc-x64-release
+          path: |
+            **/x64/Release/winvnc.exe
+            **/Release/winvnc.exe
+          if-no-files-found: error
