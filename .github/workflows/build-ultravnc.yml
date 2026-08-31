@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch: # Позволяет запускать сборку вручную из интерфейса GitHub
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -16,28 +16,34 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive # Подгружаем подмодули, если они используются в проекте
+          submodules: recursive
+          fetch-depth: 0
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Restore NuGet Packages (if present)
+      - name: Find and Build Solution
         run: |
-          nuget restore UltraVNC.sln || true
-
-      - name: Build winvnc.exe
-        run: |
-          msbuild UltraVNC.sln `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /t:winvnc `
-            /m
+          # Ищем решение winvnc.sln или UltraVNC.sln
+          $sln = Get-ChildItem -Recurse -Filter "*.sln" | Where-Object { $_.Name -match "winvnc|UltraVNC" } | Select-Object -First 1
+          
+          if (-not $sln) {
+              $sln = Get-ChildItem -Recurse -Filter "*.sln" | Select-Object -First 1
+          }
+          
+          if ($sln) {
+              Write-Host "Found solution: $($sln.FullName)"
+              msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /m
+          } else {
+              Write-Error "No .sln file found in repository!"
+              exit 1
+          }
 
       - name: Upload winvnc.exe Artifact
         uses: actions/upload-artifact@v4
         with:
           name: winvnc-x64-release
           path: |
-            **/x64/Release/winvnc.exe
-            **/Release/winvnc.exe
+            **/winvnc.exe
+            **/Release/*.exe
           if-no-files-found: error
