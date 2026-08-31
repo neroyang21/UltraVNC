@@ -10,7 +10,7 @@ on:
 jobs:
   build-windows:
     name: Build winvnc.exe (x64 Release)
-    runs-on: windows-2022
+    runs-on: windows-2019
 
     steps:
       - name: Checkout Repository
