@@ -9,51 +9,74 @@ on:
 
 jobs:
   build-windows:
-    name: Build winvnc.exe (x64 Release)
-    runs-on: windows-2019
-
+    name: Build winvnc.exe (x64 RelWithDebInfo)
+    runs-on: windows-2022
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install C++ ATL Library
-        run: |
-          $Installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-          if (Test-Path $Installer) {
-              Start-Process -FilePath $Installer -ArgumentList "modify --installPath `"${env:VSINSTALLDIR}`" --add Microsoft.VisualStudio.Component.VC.ATL --passive --norestart" -Wait
-          } else {
-              Write-Error "Visual Studio Installer not found!"
-          }
-
-      - name: Add MSBuild to PATH
+      - name: Setup MSBuild and Visual Studio Environment
         uses: microsoft/setup-msbuild@v2
 
-      - name: Install zlib via vcpkg
+      - name: Install NASM
         run: |
-          vcpkg install zlib:x64-windows
-          vcpkg integrate install
+          choco install nasm -y
+          echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Build winvnc.exe Project
+      - name: Install C++ ATL / MFC components
         run: |
-          $vcpkgInc = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include"
-          $vcpkgLib = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
-          
-          $winvncProj = Get-ChildItem -Recurse -Filter "winvnc.vcxproj" | Select-Object -First 1
-          
-          if ($winvncProj) {
-              Write-Host "Building winvnc: $($winvncProj.FullName)"
-              msbuild $winvncProj.FullName `
-                /p:Configuration=Release `
-                /p:Platform=x64 `
-                /p:CL_AllAdditionalIncludeDirectories="$vcpkgInc" `
-                /p:Link_AllAdditionalLibraryDirectories="$vcpkgLib" `
-                /m
-          } else {
-              Write-Error "winvnc.vcxproj not found!"
-              exit 1
+          $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $components = @(
+            "Microsoft.VisualStudio.Component.VC.ATL",
+            "Microsoft.VisualStudio.Component.VC.ATLMFC"
+          )
+          foreach ($component in $components) {
+            Write-Host "Installing $component..."
+            $process = Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe" `
+              -ArgumentList "modify --installPath `"$vsInstallPath`" --add $component --passive --norestart" `
+              -Wait -PassThru
+            if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
+              Write-Warning "Setup exited with code $($process.ExitCode)"
+            }
           }
+
+      - name: Setup vcpkg and install dependencies
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:PATH = "$env:VCPKG_ROOT;$env:PATH"
+          
+          # Устанавливаем все нужные пакеты (static)
+          .\vcpkg install zlib:x64-windows-static
+          .\vcpkg install zstd:x64-windows-static
+          .\vcpkg install libjpeg-turbo:x64-windows-static
+          .\vcpkg install liblzma:x64-windows-static
+          .\vcpkg install libsodium:x64-windows-static
+          .\vcpkg install minizip-ng:x64-windows-static
+          # openssl иногда тоже нужен
+          .\vcpkg install openssl:x64-windows-static
+          
+          .\vcpkg integrate install
+
+      - name: Configure and Build with CMake
+        run: |
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:PATH = "$env:VCPKG_ROOT;$env:PATH"
+          
+          mkdir obj
+          cd obj
+          
+          cmake `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            ..\cmake
+          
+          $env:CL = "/MP"
+          cmake --build . --parallel --config=RelWithDebInfo
 
       - name: Upload winvnc.exe Artifact
         uses: actions/upload-artifact@v4
@@ -61,5 +84,6 @@ jobs:
           name: winvnc-x64-release
           path: |
             **/winvnc.exe
-            **/Release/winvnc.exe
+            obj/**/winvnc.exe
+            obj/winvnc/**/winvnc.exe
           if-no-files-found: error
